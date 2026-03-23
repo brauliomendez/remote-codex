@@ -59,6 +59,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    if message is None:
+        return
+
+    chat_id = update.effective_chat.id
+    session = get_session(context.application, chat_id)
+    await session.clear_session()
+
+    sessions: dict[int, TurnLimitedSession] = context.application.bot_data["sessions"]
+    sessions.pop(chat_id, None)
+
+    await message.reply_text("Memory reset for this chat.")
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.message
     if message is None:
@@ -148,6 +163,7 @@ def build_application(settings: Settings) -> Application:
     application.bot_data["agent"] = agent
     application.bot_data["codex_server"] = codex_server
     application.bot_data["sessions"] = {}
+    application.add_handler(CommandHandler("reset", reset_command))
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     return application

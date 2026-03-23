@@ -45,6 +45,7 @@ The bot uses long polling, so no webhook or Docker setup is required.
 Conversation history is stored locally in SQLite under `data/agent_sessions.sqlite3`, with one session per Telegram chat.
 The stored history is trimmed to the last 10 user turns, where one turn means one user message plus everything until the next user message.
 If Codex MCP is enabled, the bot connects to a local Codex CLI MCP server during startup and disconnects on shutdown.
+Use `/reset` in Telegram to clear the stored memory for the current chat.
 
 ## Development commands
 
