@@ -1,6 +1,11 @@
 # Telegram OpenAI Agent Bot
 
-Minimal Python Telegram bot that forwards chat messages to an OpenAI Agent using the OpenAI Agents SDK.
+Telegram bot in Python powered by the OpenAI Agents SDK, with Codex exposed through MCP so the assistant can inspect codebases, reason about changes, and implement work from chat.
+
+Built for a simple workflow:
+- talk to the bot in Telegram
+- let the main assistant answer normally
+- let it reach for Codex MCP when the task becomes code, shell, or repo work
 
 ## Quick start
 
