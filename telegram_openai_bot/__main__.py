@@ -29,6 +29,11 @@ def main() -> None:
     if args.check_config:
         print("Configuration looks valid.")
         print(f"OPENAI_MODEL={settings.openai_model}")
+        print(f"ENABLE_CODEX_MCP={settings.enable_codex_mcp}")
+        if settings.enable_codex_mcp:
+            print(f"CODEX_MCP_COMMAND={settings.codex_mcp_command}")
+            print(f"CODEX_MCP_ARGS={' '.join(settings.codex_mcp_args)}")
+            print(f"CODEX_MCP_DEFAULT_WORKDIR={settings.codex_mcp_default_workdir or ''}")
         return
 
     application = build_application(settings)

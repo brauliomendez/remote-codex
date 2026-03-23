@@ -27,6 +27,12 @@ Set these values in `.env`:
 - `OPENAI_API_KEY`: your OpenAI API key
 - `OPENAI_MODEL`: the model name to use. Default example is `gpt-5.4-nano`
 - `TELEGRAM_BOT_TOKEN`: your Telegram bot token from BotFather
+- `ENABLE_CODEX_MCP`: set to `true` to expose Codex CLI as an MCP server to the agent
+- `CODEX_MCP_COMMAND`: launcher command for the Codex MCP server, default `npx`
+- `CODEX_MCP_ARGS`: arguments for the server command, default `-y codex mcp-server`
+- `CODEX_MCP_CLIENT_TIMEOUT_SECONDS`: MCP client timeout in seconds
+- `CODEX_MCP_SERVER_CWD`: optional working directory used to spawn the MCP server process
+- `CODEX_MCP_DEFAULT_WORKDIR`: optional default directory the assistant should use when asking Codex to implement code
 
 ## Run
 
@@ -37,6 +43,7 @@ python -m telegram_openai_bot
 
 The bot uses long polling, so no webhook or Docker setup is required.
 Conversation history is stored locally in SQLite under `data/agent_sessions.sqlite3`, with one session per Telegram chat.
+If Codex MCP is enabled, the bot connects to a local Codex CLI MCP server during startup and disconnects on shutdown.
 
 ## Development commands
 
@@ -58,6 +65,12 @@ Basic syntax/import validation:
 python -m compileall telegram_openai_bot
 ```
 
+Codex MCP smoke test:
+
+```bash
+npx -y codex --version
+```
+
 ## Validation
 
 The local validation flow for this project is:
@@ -65,6 +78,7 @@ The local validation flow for this project is:
 1. install dependencies in a virtual environment
 2. run `python -m telegram_openai_bot --check-config`
 3. run `python -m compileall telegram_openai_bot`
+4. if Codex MCP is enabled, verify `npx -y codex --version`
 
 End-to-end Telegram and OpenAI message validation requires real credentials in `.env`.
 
@@ -72,5 +86,5 @@ End-to-end Telegram and OpenAI message validation requires real credentials in `
 
 - Telegram "bot credentials" means the bot token issued by BotFather.
 - Text messages are the primary input. Non-text messages receive a short fallback reply.
-- Each Telegram chat keeps its own conversation thread through a stable OpenAI `conversation_id`.
 - Each Telegram chat keeps its own conversation history in a local SQLite-backed Agents SDK session.
+- Codex MCP is optional and requires Node.js plus a working `codex` CLI launch path.
