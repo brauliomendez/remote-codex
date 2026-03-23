@@ -6,14 +6,15 @@ from pathlib import Path
 
 from agents import Agent, Runner
 from agents.mcp import MCPServerStdio
-from agents.memory import SQLiteSession
 from telegram import Update
 from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 from .config import Settings
+from .session import TurnLimitedSession
 
 LOGGER = logging.getLogger(__name__)
 SESSION_DB_PATH = Path("data/agent_sessions.sqlite3")
+MAX_SESSION_TURNS = 10
 
 
 def build_agent(settings: Settings) -> Agent:
@@ -84,14 +85,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await message.reply_text(reply_text)
 
 
-def get_session(application: Application, chat_id: int) -> SQLiteSession:
-    sessions: dict[int, SQLiteSession] = application.bot_data["sessions"]
+def get_session(application: Application, chat_id: int) -> TurnLimitedSession:
+    sessions: dict[int, TurnLimitedSession] = application.bot_data["sessions"]
     session = sessions.get(chat_id)
     if session is None:
         SESSION_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        session = SQLiteSession(
+        session = TurnLimitedSession(
             session_id=f"telegram-chat-{chat_id}",
             db_path=SESSION_DB_PATH,
+            max_turns=MAX_SESSION_TURNS,
         )
         sessions[chat_id] = session
     return session
