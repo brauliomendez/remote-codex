@@ -1,0 +1,15 @@
+[Unit]
+Description=Telegram OpenAI Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/bot
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/root/bot/.venv/bin/python -m telegram_openai_bot
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

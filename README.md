@@ -72,6 +72,21 @@ Codex MCP smoke test:
 npx -y codex --version
 ```
 
+Install as a systemd service:
+
+```bash
+sudo cp deploy/systemd/telegram-openai-bot.service /etc/systemd/system/telegram-openai-bot.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now telegram-openai-bot
+sudo systemctl status telegram-openai-bot
+```
+
+Follow service logs:
+
+```bash
+journalctl -u telegram-openai-bot -f
+```
+
 ## Validation
 
 The local validation flow for this project is:
