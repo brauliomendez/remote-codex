@@ -43,7 +43,6 @@ python -m telegram_openai_bot
 The bot uses long polling, so no webhook or Docker setup is required.
 Conversation history is stored locally in SQLite under `data/agent_sessions.sqlite3`, with one session per Telegram chat.
 If Codex MCP is enabled, the bot connects to a local Codex CLI MCP server during startup and disconnects on shutdown.
-For deterministic Codex usage, send messages that start with `usa codex`, `use codex`, or use the `/codex` command.
 
 ## Development commands
 
