@@ -7,6 +7,14 @@ from .bot import build_application
 from .config import load_settings
 
 
+class SuppressCodexMcpNotificationWarnings(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        if "Failed to validate notification" not in message:
+            return True
+        return "input_value='codex/event'" not in message
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the Telegram OpenAI agent bot.")
     parser.add_argument(
@@ -23,6 +31,9 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    warning_filter = SuppressCodexMcpNotificationWarnings()
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(warning_filter)
 
     settings = load_settings()
 
