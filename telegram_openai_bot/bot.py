@@ -63,6 +63,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await message.reply_text("I can only process text messages right now.")
         return
 
+    if should_route_to_codex(text, context.application):
+        await run_codex_request(
+            application=context.application,
+            chat_id=update.effective_chat.id,
+            message=message,
+            prompt=extract_codex_prompt(text),
+        )
+        return
+
     agent: Agent = context.application.bot_data["agent"]
     session = get_session(context.application, update.effective_chat.id)
 
@@ -82,6 +91,111 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         reply_text = "I hit an internal error while processing your message."
 
     await message.reply_text(reply_text)
+
+
+async def codex_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    if message is None:
+        return
+
+    prompt = " ".join(context.args).strip()
+    if not prompt:
+        await message.reply_text("Usage: /codex <prompt>")
+        return
+
+    await run_codex_request(
+        application=context.application,
+        chat_id=update.effective_chat.id,
+        message=message,
+        prompt=prompt,
+    )
+
+
+def should_route_to_codex(text: str, application: Application) -> bool:
+    if application.bot_data.get("codex_server") is None:
+        return False
+
+    lowered = text.lower()
+    return lowered.startswith("usa codex") or lowered.startswith("use codex")
+
+
+def extract_codex_prompt(text: str) -> str:
+    lowered = text.lower()
+    if lowered.startswith("usa codex"):
+        return text[len("usa codex") :].lstrip(" ,:-")
+    if lowered.startswith("use codex"):
+        return text[len("use codex") :].lstrip(" ,:-")
+    return text
+
+
+async def run_codex_request(
+    application: Application,
+    chat_id: int,
+    message,
+    prompt: str,
+) -> None:
+    codex_server: MCPServerStdio | None = application.bot_data.get("codex_server")
+    if codex_server is None:
+        await message.reply_text("Codex MCP is not enabled for this bot.")
+        return
+
+    prompt = prompt.strip()
+    if not prompt:
+        await message.reply_text("Tell me what you want Codex to do.")
+        return
+
+    await application.bot.send_chat_action(chat_id=message.chat_id, action="typing")
+
+    thread_ids: dict[int, str] = application.bot_data["codex_threads"]
+    thread_id = thread_ids.get(chat_id)
+
+    try:
+        if thread_id:
+            result = await codex_server.call_tool(
+                "codex-reply",
+                {
+                    "threadId": thread_id,
+                    "prompt": prompt,
+                },
+            )
+        else:
+            arguments: dict[str, object] = {
+                "prompt": prompt,
+                "approval-policy": "never",
+            }
+            settings: Settings = application.bot_data["settings"]
+            if settings.codex_mcp_default_workdir:
+                arguments["cwd"] = settings.codex_mcp_default_workdir
+
+            result = await codex_server.call_tool("codex", arguments)
+
+        structured_content = result.structuredContent or {}
+        if structured_content.get("threadId"):
+            thread_ids[chat_id] = str(structured_content["threadId"])
+
+        reply_text = extract_codex_reply_text(result)
+        if not reply_text:
+            reply_text = "Codex finished without returning text output."
+    except Exception:
+        LOGGER.exception("Codex MCP call failed")
+        reply_text = "Codex failed while handling that request."
+
+    await message.reply_text(reply_text)
+
+
+def extract_codex_reply_text(result) -> str:
+    structured_content = getattr(result, "structuredContent", None) or {}
+    content = structured_content.get("content")
+    if isinstance(content, str) and content.strip():
+        return content.strip()
+
+    text_chunks = []
+    for item in getattr(result, "content", []):
+        text = getattr(item, "text", None)
+        if isinstance(text, str) and text.strip():
+            text_chunks.append(text.strip())
+
+    return "\n\n".join(text_chunks).strip()
 
 
 def get_session(application: Application, chat_id: int) -> SQLiteSession:
@@ -140,7 +254,10 @@ def build_application(settings: Settings) -> Application:
     )
     application.bot_data["agent"] = agent
     application.bot_data["codex_server"] = codex_server
+    application.bot_data["codex_threads"] = {}
+    application.bot_data["settings"] = settings
     application.bot_data["sessions"] = {}
+    application.add_handler(CommandHandler("codex", codex_command))
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     return application
