@@ -17,6 +17,7 @@ class Settings:
     codex_mcp_args: list[str]
     codex_mcp_client_timeout_seconds: float
     codex_mcp_default_workdir: str | None
+    codex_mcp_default_model: str | None
 
 
 def _get_bool(name: str, default: bool = False) -> bool:
@@ -39,6 +40,7 @@ def load_settings() -> Settings:
         os.getenv("CODEX_MCP_CLIENT_TIMEOUT_SECONDS", "360000").strip()
     )
     codex_mcp_default_workdir = os.getenv("CODEX_MCP_DEFAULT_WORKDIR", "").strip() or None
+    codex_mcp_default_model = os.getenv("CODEX_MCP_DEFAULT_MODEL", "").strip() or None
 
     missing = [
         name
@@ -62,4 +64,5 @@ def load_settings() -> Settings:
         codex_mcp_args=codex_mcp_args,
         codex_mcp_client_timeout_seconds=codex_mcp_client_timeout_seconds,
         codex_mcp_default_workdir=codex_mcp_default_workdir,
+        codex_mcp_default_model=codex_mcp_default_model,
     )

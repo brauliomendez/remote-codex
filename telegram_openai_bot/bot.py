@@ -37,6 +37,11 @@ def build_agent(settings: Settings) -> Agent:
                 "When using Codex for implementation and the user does not specify a directory, "
                 f"use `{settings.codex_mcp_default_workdir}` as the default working directory."
             )
+        if settings.codex_mcp_default_model:
+            instructions.append(
+                "When using the Codex MCP tools and the user does not explicitly request a "
+                f"different model, pass `model` as `{settings.codex_mcp_default_model}`."
+            )
     return Agent(
         name="Telegram Assistant",
         instructions=" ".join(instructions),

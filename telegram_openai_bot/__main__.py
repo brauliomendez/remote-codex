@@ -45,6 +45,7 @@ def main() -> None:
             print(f"CODEX_MCP_COMMAND={settings.codex_mcp_command}")
             print(f"CODEX_MCP_ARGS={' '.join(settings.codex_mcp_args)}")
             print(f"CODEX_MCP_DEFAULT_WORKDIR={settings.codex_mcp_default_workdir or ''}")
+            print(f"CODEX_MCP_DEFAULT_MODEL={settings.codex_mcp_default_model or ''}")
         return
 
     application = build_application(settings)

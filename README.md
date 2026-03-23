@@ -32,6 +32,7 @@ Set these values in `.env`:
 - `CODEX_MCP_ARGS`: arguments for the server command, default `-y codex mcp-server`
 - `CODEX_MCP_CLIENT_TIMEOUT_SECONDS`: MCP client timeout in seconds
 - `CODEX_MCP_DEFAULT_WORKDIR`: optional default directory the assistant should use when asking Codex to implement code
+- `CODEX_MCP_DEFAULT_MODEL`: optional default model name the assistant should pass when using the Codex tool
 
 ## Run
 
