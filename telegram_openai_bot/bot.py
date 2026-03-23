@@ -101,16 +101,12 @@ def build_codex_mcp_server(settings: Settings) -> MCPServerStdio | None:
     if not settings.enable_codex_mcp:
         return None
 
-    params = {
-        "command": settings.codex_mcp_command,
-        "args": settings.codex_mcp_args,
-    }
-    if settings.codex_mcp_server_cwd is not None:
-        params["cwd"] = settings.codex_mcp_server_cwd
-
     return MCPServerStdio(
         name="Codex CLI",
-        params=params,
+        params={
+            "command": settings.codex_mcp_command,
+            "args": settings.codex_mcp_args,
+        },
         client_session_timeout_seconds=settings.codex_mcp_client_timeout_seconds,
     )
 

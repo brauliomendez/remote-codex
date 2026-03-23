@@ -31,7 +31,6 @@ Set these values in `.env`:
 - `CODEX_MCP_COMMAND`: launcher command for the Codex MCP server, default `npx`
 - `CODEX_MCP_ARGS`: arguments for the server command, default `-y codex mcp-server`
 - `CODEX_MCP_CLIENT_TIMEOUT_SECONDS`: MCP client timeout in seconds
-- `CODEX_MCP_SERVER_CWD`: optional working directory used to spawn the MCP server process
 - `CODEX_MCP_DEFAULT_WORKDIR`: optional default directory the assistant should use when asking Codex to implement code
 
 ## Run
