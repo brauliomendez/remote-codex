@@ -6,7 +6,7 @@ from pathlib import Path
 
 from agents import Agent, Runner
 from agents.mcp import MCPServerStdio
-from telegram import Update
+from telegram import BotCommand, Update
 from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 from .config import Settings
@@ -134,6 +134,13 @@ def build_codex_mcp_server(settings: Settings) -> MCPServerStdio | None:
 
 
 async def post_init(application: Application) -> None:
+    await application.bot.set_my_commands(
+        [
+            BotCommand("start", "Show the welcome message"),
+            BotCommand("reset", "Clear the stored memory for this chat"),
+        ]
+    )
+
     codex_server: MCPServerStdio | None = application.bot_data.get("codex_server")
     if codex_server is None:
         return
