@@ -1,11 +1,29 @@
-# Telegram OpenAI Agent Bot
+# Telegram Codex Bridge
 
-Telegram bot in Python powered by the OpenAI Agents SDK, with Codex exposed through MCP so the assistant can inspect codebases, reason about changes, and implement work from chat.
+Bot de Telegram en Python que reenvia cada mensaje de texto directamente a Codex CLI.
 
-Built for a simple workflow:
-- talk to the bot in Telegram
-- let the main assistant answer normally
-- let it reach for Codex MCP when the task becomes code, shell, or repo work
+No usa `openai-agents`, no expone Codex por MCP y no mantiene una memoria paralela en el bot. La continuidad de la conversacion la lleva Codex: cada chat de Telegram queda enlazado a un `thread_id` de Codex y el siguiente mensaje hace `codex exec resume`.
+
+## Que hace
+
+- Reenvia mensajes de Telegram a `codex exec`
+- Reanuda la misma conversacion de Codex por chat de Telegram
+- Guarda por chat el `thread_id` y el `workdir` en SQLite
+- Permite cambiar el directorio de trabajo con `/path`
+- Permite cortar la conversacion actual con `/new` o `/reset`
+- Lista sesiones recientes con `/sessions`
+- Permite retomar una sesion anterior con `/resume`
+
+## Comandos
+
+- `/start`: muestra ayuda rapida y el estado actual
+- `/path`: muestra el directorio de trabajo actual
+- `/path <ruta>`: cambia el directorio de trabajo para ese chat y abre una sesion nueva
+- `/status`: muestra `workdir`, `thread_id`, modelo y sandbox
+- `/sessions`: lista sesiones recientes guardadas para ese chat
+- `/resume <numero|thread_id>`: retoma una sesion anterior y restaura su `workdir`
+- `/new`: desvincula el `thread_id` actual, pero mantiene el historial para `/resume`
+- `/reset`: desvincula el `thread_id` actual y borra el historial guardado por el bot para ese chat
 
 ## Quick start
 
@@ -18,67 +36,60 @@ python -m telegram_openai_bot --check-config
 python -m telegram_openai_bot
 ```
 
-## Stack
+## Requisitos
 
 - Python 3.12
-- `openai-agents` for the agent runtime
-- `python-telegram-bot` for Telegram polling
-- `python-dotenv` for `.env` loading
+- `python-telegram-bot`
+- `python-dotenv`
+- `codex` instalado y autenticado en la maquina
 
-## Configuration
-
-Set these values in `.env`:
-
-- `OPENAI_API_KEY`: your OpenAI API key
-- `OPENAI_MODEL`: the model name to use. Default example is `gpt-5.4-nano`
-- `TELEGRAM_BOT_TOKEN`: your Telegram bot token from BotFather
-- `ENABLE_CODEX_MCP`: set to `true` to expose Codex CLI as an MCP server to the agent
-- `CODEX_MCP_COMMAND`: launcher command for the Codex MCP server, default `npx`
-- `CODEX_MCP_ARGS`: arguments for the server command, default `-y codex mcp-server`
-- `CODEX_MCP_CLIENT_TIMEOUT_SECONDS`: MCP client timeout in seconds
-- `CODEX_MCP_DEFAULT_WORKDIR`: optional default directory the assistant should use when asking Codex to implement code
-- `CODEX_MCP_DEFAULT_MODEL`: optional default model name the assistant should pass when using the Codex tool
-
-## Run
+Comprobacion minima:
 
 ```bash
-. .venv/bin/activate
-python -m telegram_openai_bot
+codex --version
+codex exec --help
 ```
 
-The bot uses long polling, so no webhook or Docker setup is required.
-Conversation history is stored locally in SQLite under `data/agent_sessions.sqlite3`, with one session per Telegram chat.
-The stored history is trimmed to the last 10 user turns, where one turn means one user message plus everything until the next user message.
-If Codex MCP is enabled, the bot connects to a local Codex CLI MCP server during startup and disconnects on shutdown.
-Use `/reset` in Telegram to clear the stored memory for the current chat.
+## Configuracion
 
-## Development commands
+Variables en `.env`:
 
-Install dependencies:
+- `TELEGRAM_BOT_TOKEN`: token del bot de Telegram
+- `CODEX_COMMAND`: binario a ejecutar, por defecto `codex`
+- `CODEX_BASE_ARGS`: argumentos base opcionales antes de `exec`
+- `CODEX_DEFAULT_WORKDIR`: directorio inicial por defecto para chats nuevos
+- `CODEX_ALLOWED_ROOTS`: lista de roots permitidos separada por `:`. Si esta vacia, cualquier directorio existente es valido
+- `CODEX_MODEL`: modelo opcional para pasar a Codex
+- `CODEX_SANDBOX`: sandbox de Codex, por defecto `workspace-write`
+- `CODEX_SKIP_GIT_REPO_CHECK`: por defecto `true`
+- `CODEX_ENABLE_WEB_SEARCH`: activa `--search` en Codex
+- `STATE_DB_PATH`: ruta de la base SQLite del bot
 
-```bash
-pip install -r requirements.txt
-```
+## Como funciona la continuidad
 
-Validate configuration without starting polling:
+1. el primer mensaje de un chat ejecuta `codex exec`
+2. Codex devuelve un `thread_id`
+3. el bot guarda ese `thread_id`
+4. el siguiente mensaje usa `codex exec resume <thread_id>`
+
+Si cambias el path con `/path`, el bot corta la sesion actual para no mezclar contexto de Codex entre repositorios distintos.
+Las sesiones anteriores siguen guardadas en el historial del chat y pueden recuperarse con `/sessions` y `/resume`.
+
+## Archivos de estado
+
+- SQLite del bot: `data/telegram_codex_state.sqlite3`
+- Sesiones internas de Codex: las gestiona el propio CLI en `~/.codex/`
+
+## Validacion local
 
 ```bash
 python -m telegram_openai_bot --check-config
-```
-
-Basic syntax/import validation:
-
-```bash
 python -m compileall telegram_openai_bot
 ```
 
-Codex MCP smoke test:
+La validacion end to end requiere credenciales reales de Telegram y una instalacion funcional de Codex CLI.
 
-```bash
-npx -y codex --version
-```
-
-Install as a systemd service:
+## Servicio systemd
 
 ```bash
 sudo cp deploy/systemd/telegram-openai-bot.service /etc/systemd/system/telegram-openai-bot.service
@@ -87,26 +98,8 @@ sudo systemctl enable --now telegram-openai-bot
 sudo systemctl status telegram-openai-bot
 ```
 
-Follow service logs:
+Logs:
 
 ```bash
 journalctl -u telegram-openai-bot -f
 ```
-
-## Validation
-
-The local validation flow for this project is:
-
-1. install dependencies in a virtual environment
-2. run `python -m telegram_openai_bot --check-config`
-3. run `python -m compileall telegram_openai_bot`
-4. if Codex MCP is enabled, verify `npx -y codex --version`
-
-End-to-end Telegram and OpenAI message validation requires real credentials in `.env`.
-
-## Assumptions
-
-- Telegram "bot credentials" means the bot token issued by BotFather.
-- Text messages are the primary input. Non-text messages receive a short fallback reply.
-- Each Telegram chat keeps its own conversation history in a local SQLite-backed session, trimmed to the last 10 user turns.
-- Codex MCP is optional and requires Node.js plus a working `codex` CLI launch path.

@@ -7,16 +7,8 @@ from .bot import build_application
 from .config import load_settings
 
 
-class SuppressCodexMcpNotificationWarnings(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        message = record.getMessage()
-        if "Failed to validate notification" not in message:
-            return True
-        return "input_value='codex/event'" not in message
-
-
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the Telegram OpenAI agent bot.")
+    parser = argparse.ArgumentParser(description="Run the Telegram Codex bridge bot.")
     parser.add_argument(
         "--check-config",
         action="store_true",
@@ -31,21 +23,19 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    warning_filter = SuppressCodexMcpNotificationWarnings()
-    for handler in logging.getLogger().handlers:
-        handler.addFilter(warning_filter)
 
     settings = load_settings()
 
     if args.check_config:
         print("Configuration looks valid.")
-        print(f"OPENAI_MODEL={settings.openai_model}")
-        print(f"ENABLE_CODEX_MCP={settings.enable_codex_mcp}")
-        if settings.enable_codex_mcp:
-            print(f"CODEX_MCP_COMMAND={settings.codex_mcp_command}")
-            print(f"CODEX_MCP_ARGS={' '.join(settings.codex_mcp_args)}")
-            print(f"CODEX_MCP_DEFAULT_WORKDIR={settings.codex_mcp_default_workdir or ''}")
-            print(f"CODEX_MCP_DEFAULT_MODEL={settings.codex_mcp_default_model or ''}")
+        print(f"CODEX_COMMAND={settings.codex_command}")
+        print(f"CODEX_BASE_ARGS={' '.join(settings.codex_base_args)}")
+        print(f"CODEX_DEFAULT_WORKDIR={settings.codex_default_workdir}")
+        print(f"CODEX_MODEL={settings.codex_model or ''}")
+        print(f"CODEX_SANDBOX={settings.codex_sandbox}")
+        print(f"CODEX_SKIP_GIT_REPO_CHECK={settings.codex_skip_git_repo_check}")
+        print(f"CODEX_ENABLE_WEB_SEARCH={settings.codex_enable_web_search}")
+        print(f"STATE_DB_PATH={settings.state_db_path}")
         return
 
     application = build_application(settings)

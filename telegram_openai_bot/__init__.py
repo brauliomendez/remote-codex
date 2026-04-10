@@ -1,1 +1,1 @@
-"""Telegram bot backed by the OpenAI Agents SDK."""
+"""Telegram bot that forwards chat messages to Codex CLI."""

@@ -1,5 +1,5 @@
 [Unit]
-Description=Telegram OpenAI Bot
+Description=Telegram Codex Bridge Bot
 After=network.target
 
 [Service]

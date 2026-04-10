@@ -3,21 +3,23 @@ from __future__ import annotations
 import os
 import shlex
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 
 @dataclass(frozen=True)
 class Settings:
-    openai_api_key: str
-    openai_model: str
     telegram_bot_token: str
-    enable_codex_mcp: bool
-    codex_mcp_command: str
-    codex_mcp_args: list[str]
-    codex_mcp_client_timeout_seconds: float
-    codex_mcp_default_workdir: str | None
-    codex_mcp_default_model: str | None
+    codex_command: str
+    codex_base_args: list[str]
+    codex_default_workdir: Path
+    codex_allowed_roots: tuple[Path, ...]
+    codex_model: str | None
+    codex_sandbox: str
+    codex_skip_git_repo_check: bool
+    codex_enable_web_search: bool
+    state_db_path: Path
 
 
 def _get_bool(name: str, default: bool = False) -> bool:
@@ -27,26 +29,32 @@ def _get_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _split_paths(value: str) -> tuple[Path, ...]:
+    if not value.strip():
+        return ()
+    return tuple(Path(part).expanduser().resolve() for part in value.split(os.pathsep) if part.strip())
+
+
 def load_settings() -> Settings:
     load_dotenv()
 
-    openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    openai_model = os.getenv("OPENAI_MODEL", "").strip()
     telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    enable_codex_mcp = _get_bool("ENABLE_CODEX_MCP", default=False)
-    codex_mcp_command = os.getenv("CODEX_MCP_COMMAND", "npx").strip()
-    codex_mcp_args = shlex.split(os.getenv("CODEX_MCP_ARGS", "-y codex mcp-server"))
-    codex_mcp_client_timeout_seconds = float(
-        os.getenv("CODEX_MCP_CLIENT_TIMEOUT_SECONDS", "360000").strip()
-    )
-    codex_mcp_default_workdir = os.getenv("CODEX_MCP_DEFAULT_WORKDIR", "").strip() or None
-    codex_mcp_default_model = os.getenv("CODEX_MCP_DEFAULT_MODEL", "").strip() or None
+    codex_command = os.getenv("CODEX_COMMAND", "codex").strip()
+    codex_base_args = shlex.split(os.getenv("CODEX_BASE_ARGS", ""))
+    default_workdir_raw = os.getenv("CODEX_DEFAULT_WORKDIR", "").strip() or os.getcwd()
+    codex_default_workdir = Path(default_workdir_raw).expanduser().resolve()
+    codex_allowed_roots = _split_paths(os.getenv("CODEX_ALLOWED_ROOTS", "").strip())
+    codex_model = os.getenv("CODEX_MODEL", "").strip() or None
+    codex_sandbox = os.getenv("CODEX_SANDBOX", "workspace-write").strip() or "workspace-write"
+    codex_skip_git_repo_check = _get_bool("CODEX_SKIP_GIT_REPO_CHECK", default=True)
+    codex_enable_web_search = _get_bool("CODEX_ENABLE_WEB_SEARCH", default=False)
+    state_db_path = Path(
+        os.getenv("STATE_DB_PATH", "data/telegram_codex_state.sqlite3").strip()
+    ).expanduser()
 
     missing = [
         name
         for name, value in (
-            ("OPENAI_API_KEY", openai_api_key),
-            ("OPENAI_MODEL", openai_model),
             ("TELEGRAM_BOT_TOKEN", telegram_bot_token),
         )
         if not value
@@ -55,14 +63,22 @@ def load_settings() -> Settings:
         missing_list = ", ".join(missing)
         raise RuntimeError(f"Missing required environment variables: {missing_list}")
 
+    if not codex_default_workdir.is_dir():
+        raise RuntimeError(f"CODEX_DEFAULT_WORKDIR is not a directory: {codex_default_workdir}")
+
+    for root in codex_allowed_roots:
+        if not root.is_dir():
+            raise RuntimeError(f"CODEX_ALLOWED_ROOTS contains a non-directory path: {root}")
+
     return Settings(
-        openai_api_key=openai_api_key,
-        openai_model=openai_model,
         telegram_bot_token=telegram_bot_token,
-        enable_codex_mcp=enable_codex_mcp,
-        codex_mcp_command=codex_mcp_command,
-        codex_mcp_args=codex_mcp_args,
-        codex_mcp_client_timeout_seconds=codex_mcp_client_timeout_seconds,
-        codex_mcp_default_workdir=codex_mcp_default_workdir,
-        codex_mcp_default_model=codex_mcp_default_model,
+        codex_command=codex_command,
+        codex_base_args=codex_base_args,
+        codex_default_workdir=codex_default_workdir,
+        codex_allowed_roots=codex_allowed_roots,
+        codex_model=codex_model,
+        codex_sandbox=codex_sandbox,
+        codex_skip_git_repo_check=codex_skip_git_repo_check,
+        codex_enable_web_search=codex_enable_web_search,
+        state_db_path=state_db_path,
     )
