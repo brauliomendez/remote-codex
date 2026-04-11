@@ -64,6 +64,7 @@ Variables en `.env`:
 - `CODEX_SKIP_GIT_REPO_CHECK`: por defecto `true`
 - `CODEX_ENABLE_WEB_SEARCH`: activa `--search` en Codex
 - `STATE_DB_PATH`: ruta de la base SQLite del bot
+- `TELEGRAM_SUMMARY_WORD_LIMIT`: si una respuesta supera este numero de palabras, el bot pide a Codex un resumen breve antes de reenviarla
 
 ## Como funciona la continuidad
 

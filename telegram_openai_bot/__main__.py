@@ -36,6 +36,7 @@ def main() -> None:
         print(f"CODEX_SKIP_GIT_REPO_CHECK={settings.codex_skip_git_repo_check}")
         print(f"CODEX_ENABLE_WEB_SEARCH={settings.codex_enable_web_search}")
         print(f"STATE_DB_PATH={settings.state_db_path}")
+        print(f"TELEGRAM_SUMMARY_WORD_LIMIT={settings.telegram_summary_word_limit}")
         return
 
     application = build_application(settings)

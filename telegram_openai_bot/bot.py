@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 from pathlib import Path
+import re
 
 from telegram import BotCommand, Update
 from telegram.constants import ChatAction
@@ -12,10 +13,10 @@ from telegram.ext import Application, ApplicationBuilder, CommandHandler, Contex
 from .codex_bridge import CodexBridge
 from .config import Settings
 from .state import ChatStateStore
+from .telegram_format import render_telegram_html_chunks, strip_telegram_html
 
 LOGGER = logging.getLogger(__name__)
-
-MAX_TELEGRAM_MESSAGE_LENGTH = 4000
+WORD_RE = re.compile(r"\S+")
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -200,6 +201,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         typing_task = asyncio.create_task(_send_typing(context, message.chat_id))
         try:
             result = await bridge.run(prompt=text, workdir=state.workdir, thread_id=state.thread_id)
+            result = await maybe_summarize_result(
+                bridge=bridge,
+                result=result,
+                settings=context.application.bot_data["settings"],
+                workdir=state.workdir,
+            )
             store.set_thread_id(chat_id, result.thread_id)
             await reply_long_message(message, result.reply_text)
         except Exception as error:
@@ -231,27 +238,54 @@ async def _send_typing(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None
 
 
 async def reply_long_message(message, text: str) -> None:
-    chunks = split_message(text)
+    chunks = render_telegram_html_chunks(text)
     for chunk in chunks:
-        await message.reply_text(chunk)
+        try:
+            await message.reply_text(chunk, parse_mode="HTML")
+        except Exception:
+            LOGGER.exception("Telegram HTML rendering failed, falling back to plain text")
+            await message.reply_text(strip_telegram_html(chunk))
 
 
-def split_message(text: str) -> list[str]:
-    stripped = text.strip()
-    if len(stripped) <= MAX_TELEGRAM_MESSAGE_LENGTH:
-        return [stripped]
-    chunks: list[str] = []
-    remaining = stripped
-    while remaining:
-        if len(remaining) <= MAX_TELEGRAM_MESSAGE_LENGTH:
-            chunks.append(remaining)
-            break
-        split_at = remaining.rfind("\n", 0, MAX_TELEGRAM_MESSAGE_LENGTH)
-        if split_at <= 0:
-            split_at = MAX_TELEGRAM_MESSAGE_LENGTH
-        chunks.append(remaining[:split_at].strip())
-        remaining = remaining[split_at:].strip()
-    return chunks
+async def maybe_summarize_result(
+    bridge: CodexBridge,
+    result,
+    settings: Settings,
+    workdir: Path,
+):
+    if count_words(result.reply_text) <= settings.telegram_summary_word_limit:
+        return result
+
+    LOGGER.info(
+        "Reply exceeded %s words, requesting condensed summary",
+        settings.telegram_summary_word_limit,
+    )
+    summary_prompt = (
+        "Tu ultima respuesta fue demasiado larga para reenviarla completa a Telegram. "
+        "Resume solo lo ultimo que has hecho en formato operativo y breve.\n\n"
+        "Incluye unicamente estas secciones:\n"
+        "- Objetivo\n"
+        "- Acciones realizadas\n"
+        "- Archivos o rutas relevantes\n"
+        "- Estado final o siguiente paso\n\n"
+        f"Limite duro: 400 palabras. Responde en espanol."
+    )
+    summary_result = await bridge.run(
+        prompt=summary_prompt,
+        workdir=workdir,
+        thread_id=result.thread_id,
+    )
+    prefix = (
+        f"Respuesta original omitida por superar {settings.telegram_summary_word_limit} palabras.\n\n"
+    )
+    return type(summary_result)(
+        thread_id=summary_result.thread_id,
+        reply_text=prefix + summary_result.reply_text.strip(),
+    )
+
+
+def count_words(text: str) -> int:
+    return len(WORD_RE.findall(text))
 
 
 def validate_workdir(raw_path: str, current_workdir: Path, settings: Settings) -> Path:

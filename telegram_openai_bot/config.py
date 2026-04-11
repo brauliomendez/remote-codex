@@ -20,6 +20,7 @@ class Settings:
     codex_skip_git_repo_check: bool
     codex_enable_web_search: bool
     state_db_path: Path
+    telegram_summary_word_limit: int
 
 
 def _get_bool(name: str, default: bool = False) -> bool:
@@ -51,6 +52,9 @@ def load_settings() -> Settings:
     state_db_path = Path(
         os.getenv("STATE_DB_PATH", "data/telegram_codex_state.sqlite3").strip()
     ).expanduser()
+    telegram_summary_word_limit = int(
+        os.getenv("TELEGRAM_SUMMARY_WORD_LIMIT", "2000").strip()
+    )
 
     missing = [
         name
@@ -81,4 +85,5 @@ def load_settings() -> Settings:
         codex_skip_git_repo_check=codex_skip_git_repo_check,
         codex_enable_web_search=codex_enable_web_search,
         state_db_path=state_db_path,
+        telegram_summary_word_limit=telegram_summary_word_limit,
     )
