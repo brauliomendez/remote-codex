@@ -1,32 +1,32 @@
 # Telegram Codex Bridge
 
-Bot de Telegram en Python que reenvia mensajes de texto e imagenes directamente a Codex CLI.
+Python Telegram bot that forwards text and image messages directly to Codex CLI.
 
-No usa `openai-agents`, no expone Codex por MCP y no mantiene una memoria paralela en el bot. La continuidad de la conversacion la lleva Codex: cada chat de Telegram queda enlazado a un `thread_id` de Codex y el siguiente mensaje hace `codex exec resume`.
+It does not use `openai-agents`, does not expose Codex through MCP, and does not keep a parallel conversation memory inside the bot. Conversation continuity is handled by Codex itself: each Telegram chat is linked to a Codex `thread_id`, and the next message uses `codex exec resume`.
 
-## Que hace
+## What It Does
 
-- Reenvia mensajes de Telegram a `codex exec`
-- Acepta una imagen con caption y la pasa a Codex como entrada multimodal
-- Reanuda la misma conversacion de Codex por chat de Telegram
-- Guarda por chat el `thread_id` y el `workdir` en SQLite
-- Permite cambiar el directorio de trabajo con `/path`
-- Permite cortar la conversacion actual con `/new` o `/reset`
-- Lista sesiones recientes con `/sessions`
-- Permite retomar una sesion anterior con `/resume`
+- Forwards Telegram messages to `codex exec`
+- Accepts one image with an optional caption and sends it to Codex as multimodal input
+- Resumes the same Codex conversation for each Telegram chat
+- Stores the per-chat `thread_id` and `workdir` in SQLite
+- Lets you change the working directory with `/path`
+- Lets you cut the current conversation with `/new` or `/reset`
+- Lists recent sessions with `/sessions`
+- Lets you resume a previous session with `/resume`
 
-## Comandos
+## Commands
 
-- `/start`: muestra ayuda rapida y el estado actual
-- `/path`: muestra el directorio de trabajo actual
-- `/path <ruta>`: cambia el directorio de trabajo para ese chat y abre una sesion nueva
-- `/status`: muestra `workdir`, `thread_id`, modelo y sandbox
-- `/sessions`: lista sesiones recientes guardadas para ese chat
-- `/resume <numero|thread_id>`: retoma una sesion anterior y restaura su `workdir`
-- `/new`: desvincula el `thread_id` actual, pero mantiene el historial para `/resume`
-- `/reset`: desvincula el `thread_id` actual y borra el historial guardado por el bot para ese chat
+- `/start`: shows quick help and the current state
+- `/path`: shows the current working directory
+- `/path <path>`: changes the working directory for that chat and starts a new session
+- `/status`: shows `workdir`, `thread_id`, model, and sandbox
+- `/sessions`: lists recent sessions stored for that chat
+- `/resume <number|thread_id>`: resumes a previous session and restores its `workdir`
+- `/new`: clears the current `thread_id` link but keeps session history for `/resume`
+- `/reset`: clears the current `thread_id` link and deletes the session history stored by the bot for that chat
 
-## Quick start
+## Quick Start
 
 ```bash
 python3 -m venv .venv
@@ -37,60 +37,60 @@ python -m telegram_openai_bot --check-config
 python -m telegram_openai_bot
 ```
 
-## Requisitos
+## Requirements
 
 - Python 3.12
 - `python-telegram-bot`
 - `python-dotenv`
-- `codex` instalado y autenticado en la maquina
+- `codex` installed and authenticated on the machine
 
-Comprobacion minima:
+Minimum check:
 
 ```bash
 codex --version
 codex exec --help
 ```
 
-## Configuracion
+## Configuration
 
-Variables en `.env`:
+Variables in `.env`:
 
-- `TELEGRAM_BOT_TOKEN`: token del bot de Telegram
-- `CODEX_COMMAND`: binario a ejecutar, por defecto `codex`
-- `CODEX_BASE_ARGS`: argumentos base opcionales antes de `exec`
-- `CODEX_DEFAULT_WORKDIR`: directorio inicial por defecto para chats nuevos
-- `CODEX_MODEL`: modelo opcional para pasar a Codex
-- `CODEX_SANDBOX`: sandbox de Codex, por defecto `workspace-write`
-- `CODEX_SKIP_GIT_REPO_CHECK`: por defecto `true`
-- `CODEX_ENABLE_WEB_SEARCH`: activa `--search` en Codex
-- `STATE_DB_PATH`: ruta de la base SQLite del bot
-- `TELEGRAM_SUMMARY_WORD_LIMIT`: si una respuesta supera este numero de palabras, el bot pide a Codex un resumen breve antes de reenviarla
+- `TELEGRAM_BOT_TOKEN`: Telegram bot token
+- `CODEX_COMMAND`: binary to run, default `codex`
+- `CODEX_BASE_ARGS`: optional base arguments before `exec`
+- `CODEX_DEFAULT_WORKDIR`: default initial directory for new chats
+- `CODEX_MODEL`: optional model passed to Codex
+- `CODEX_SANDBOX`: Codex sandbox mode, default `workspace-write`
+- `CODEX_SKIP_GIT_REPO_CHECK`: defaults to `true`
+- `CODEX_ENABLE_WEB_SEARCH`: enables `--search` in Codex
+- `STATE_DB_PATH`: path to the bot's SQLite database
+- `TELEGRAM_SUMMARY_WORD_LIMIT`: if a response exceeds this number of words, the bot asks Codex for a short summary before forwarding it
 
-## Como funciona la continuidad
+## How Continuity Works
 
-1. el primer mensaje de un chat ejecuta `codex exec`
-2. Codex devuelve un `thread_id`
-3. el bot guarda ese `thread_id`
-4. el siguiente mensaje usa `codex exec resume <thread_id>`
+1. The first message in a chat runs `codex exec`
+2. Codex returns a `thread_id`
+3. The bot stores that `thread_id`
+4. The next message uses `codex exec resume <thread_id>`
 
-Si cambias el path con `/path`, el bot corta la sesion actual para no mezclar contexto de Codex entre repositorios distintos.
-Las sesiones anteriores siguen guardadas en el historial del chat y pueden recuperarse con `/sessions` y `/resume`.
+If you change the path with `/path`, the bot cuts the current session so Codex context is not mixed across different repositories or directories.
+Previous sessions remain stored in the chat history and can be recovered with `/sessions` and `/resume`.
 
-## Archivos de estado
+## State Files
 
-- SQLite del bot: `data/telegram_codex_state.sqlite3`
-- Sesiones internas de Codex: las gestiona el propio CLI en `~/.codex/`
+- Bot SQLite database: `data/telegram_codex_state.sqlite3`
+- Internal Codex sessions: managed by the CLI itself in `~/.codex/`
 
-## Validacion local
+## Local Validation
 
 ```bash
 python -m telegram_openai_bot --check-config
 python -m compileall telegram_openai_bot
 ```
 
-La validacion end to end requiere credenciales reales de Telegram y una instalacion funcional de Codex CLI.
+End-to-end validation requires real Telegram credentials and a working Codex CLI installation.
 
-## Servicio systemd
+## systemd Service
 
 ```bash
 sudo cp deploy/systemd/telegram-openai-bot.service /etc/systemd/system/telegram-openai-bot.service
