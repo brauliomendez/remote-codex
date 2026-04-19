@@ -5,6 +5,7 @@ from html import escape
 from html import unescape
 
 MAX_TELEGRAM_MESSAGE_LENGTH = 4000
+SAFE_TELEGRAM_MESSAGE_LENGTH = 3500
 
 FENCED_BLOCK_RE = re.compile(r"^```(?P<lang>[^\n`]*)\n(?P<body>.*?)\n```$", re.DOTALL)
 ORDERED_LIST_RE = re.compile(r"^\d+\.\s+")
@@ -29,7 +30,7 @@ def render_telegram_html_chunks(markdown_text: str) -> list[str]:
         rendered_parts = _render_block_to_chunks(block)
         for part in rendered_parts:
             candidate = part if not current else f"{current}\n\n{part}"
-            if len(candidate) <= MAX_TELEGRAM_MESSAGE_LENGTH:
+            if len(candidate) <= SAFE_TELEGRAM_MESSAGE_LENGTH:
                 current = candidate
                 continue
             if current:
@@ -44,6 +45,27 @@ def strip_telegram_html(rendered: str) -> str:
     plain = re.sub(r"<br>", "\n", rendered)
     plain = re.sub(r"</?(?:b|i|u|s|code|pre)>", "", plain)
     return unescape(plain)
+
+
+def split_plain_text_chunks(text: str) -> list[str]:
+    stripped = text.strip()
+    if not stripped:
+        return [""]
+
+    chunks: list[str] = []
+    remaining = stripped
+    while remaining:
+        if len(remaining) <= SAFE_TELEGRAM_MESSAGE_LENGTH:
+            chunks.append(remaining)
+            break
+        split_at = remaining.rfind("\n", 0, SAFE_TELEGRAM_MESSAGE_LENGTH)
+        if split_at <= 0:
+            split_at = remaining.rfind(" ", 0, SAFE_TELEGRAM_MESSAGE_LENGTH)
+        if split_at <= 0:
+            split_at = SAFE_TELEGRAM_MESSAGE_LENGTH
+        chunks.append(remaining[:split_at].strip())
+        remaining = remaining[split_at:].strip()
+    return chunks
 
 
 def _split_blocks(text: str) -> list[str]:
@@ -91,19 +113,20 @@ def _render_fenced_code_chunks(code: str) -> list[str]:
     chunks: list[str] = []
     current: list[str] = []
     wrapper_overhead = len("<pre><code></code></pre>")
+    max_code_payload = SAFE_TELEGRAM_MESSAGE_LENGTH - wrapper_overhead
     current_len = wrapper_overhead
     for line in lines:
-        escaped_line = escape(line)
-        line_len = len(escaped_line) + (1 if current else 0)
-        if current and current_len + line_len > MAX_TELEGRAM_MESSAGE_LENGTH:
-            chunks.append(f"<pre><code>{'\n'.join(current)}</code></pre>")
-            current = [escaped_line]
-            current_len = wrapper_overhead + len(escaped_line)
-            continue
-        if current:
-            current_len += 1
-        current.append(escaped_line)
-        current_len += len(escaped_line)
+        for escaped_line in _chunk_long_text(escape(line), max_code_payload):
+            line_len = len(escaped_line) + (1 if current else 0)
+            if current and current_len + line_len > SAFE_TELEGRAM_MESSAGE_LENGTH:
+                chunks.append(f"<pre><code>{'\n'.join(current)}</code></pre>")
+                current = [escaped_line]
+                current_len = wrapper_overhead + len(escaped_line)
+                continue
+            if current:
+                current_len += 1
+            current.append(escaped_line)
+            current_len += len(escaped_line)
     if current:
         chunks.append(f"<pre><code>{'\n'.join(current)}</code></pre>")
     return chunks
@@ -123,23 +146,37 @@ def _render_list(lines: list[str]) -> str:
 
 
 def _split_long_block(rendered: str) -> list[str]:
-    if len(rendered) <= MAX_TELEGRAM_MESSAGE_LENGTH:
+    if len(rendered) <= SAFE_TELEGRAM_MESSAGE_LENGTH:
         return [rendered]
 
     plain = strip_telegram_html(rendered)
     parts: list[str] = []
     remaining = plain.strip()
     while remaining:
-        if len(remaining) <= MAX_TELEGRAM_MESSAGE_LENGTH:
+        if len(remaining) <= SAFE_TELEGRAM_MESSAGE_LENGTH:
             parts.append(escape(remaining).replace("\n", "<br>"))
             break
-        split_at = remaining.rfind("\n", 0, MAX_TELEGRAM_MESSAGE_LENGTH)
+        split_at = remaining.rfind("\n", 0, SAFE_TELEGRAM_MESSAGE_LENGTH)
         if split_at <= 0:
-            split_at = remaining.rfind(" ", 0, MAX_TELEGRAM_MESSAGE_LENGTH)
+            split_at = remaining.rfind(" ", 0, SAFE_TELEGRAM_MESSAGE_LENGTH)
         if split_at <= 0:
-            split_at = MAX_TELEGRAM_MESSAGE_LENGTH
+            split_at = SAFE_TELEGRAM_MESSAGE_LENGTH
         parts.append(escape(remaining[:split_at].strip()).replace("\n", "<br>"))
         remaining = remaining[split_at:].strip()
+    return parts
+
+
+def _chunk_long_text(text: str, max_length: int) -> list[str]:
+    if len(text) <= max_length:
+        return [text]
+    parts: list[str] = []
+    remaining = text
+    while remaining:
+        if len(remaining) <= max_length:
+            parts.append(remaining)
+            break
+        parts.append(remaining[:max_length])
+        remaining = remaining[max_length:]
     return parts
 
 

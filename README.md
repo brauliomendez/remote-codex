@@ -1,12 +1,13 @@
 # Telegram Codex Bridge
 
-Bot de Telegram en Python que reenvia cada mensaje de texto directamente a Codex CLI.
+Bot de Telegram en Python que reenvia mensajes de texto e imagenes directamente a Codex CLI.
 
 No usa `openai-agents`, no expone Codex por MCP y no mantiene una memoria paralela en el bot. La continuidad de la conversacion la lleva Codex: cada chat de Telegram queda enlazado a un `thread_id` de Codex y el siguiente mensaje hace `codex exec resume`.
 
 ## Que hace
 
 - Reenvia mensajes de Telegram a `codex exec`
+- Acepta una imagen con caption y la pasa a Codex como entrada multimodal
 - Reanuda la misma conversacion de Codex por chat de Telegram
 - Guarda por chat el `thread_id` y el `workdir` en SQLite
 - Permite cambiar el directorio de trabajo con `/path`
@@ -58,7 +59,6 @@ Variables en `.env`:
 - `CODEX_COMMAND`: binario a ejecutar, por defecto `codex`
 - `CODEX_BASE_ARGS`: argumentos base opcionales antes de `exec`
 - `CODEX_DEFAULT_WORKDIR`: directorio inicial por defecto para chats nuevos
-- `CODEX_ALLOWED_ROOTS`: lista de roots permitidos separada por `:`. Si esta vacia, cualquier directorio existente es valido
 - `CODEX_MODEL`: modelo opcional para pasar a Codex
 - `CODEX_SANDBOX`: sandbox de Codex, por defecto `workspace-write`
 - `CODEX_SKIP_GIT_REPO_CHECK`: por defecto `true`
