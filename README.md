@@ -8,6 +8,7 @@ It does not use `openai-agents`, does not expose Codex through MCP, and does not
 
 - Forwards Telegram messages to `codex exec`
 - Accepts one image with an optional caption and sends it to Codex as multimodal input
+- Sends generated image outputs back to Telegram when Codex creates or edits raster assets
 - Resumes the same Codex conversation for each Telegram chat
 - Stores the per-chat `thread_id` and `workdir` in SQLite
 - Lets you change the working directory with `/path`

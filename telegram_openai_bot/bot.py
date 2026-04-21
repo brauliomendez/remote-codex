@@ -218,6 +218,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             )
             store.set_thread_id(chat_id, result.thread_id)
             await reply_streamed_result(progress, result.reply_text)
+            await send_generated_images(progress, result.generated_images)
         except Exception as error:
             LOGGER.exception("Codex run failed")
             await message.reply_text(f"Error ejecutando Codex: {error}")
@@ -339,6 +340,17 @@ async def reply_streamed_result(progress: ProgressMessage, text: str) -> None:
         await progress.message.reply_text(chunk)
 
 
+async def send_generated_images(progress: ProgressMessage, image_paths: tuple[Path, ...]) -> None:
+    for image_path in image_paths:
+        if not image_path.is_file():
+            continue
+        with image_path.open("rb") as image_file:
+            if should_send_as_photo(image_path):
+                await progress.message.reply_photo(photo=image_file)
+            else:
+                await progress.message.reply_document(document=image_file)
+
+
 async def maybe_summarize_result(
     bridge: CodexBridge,
     result,
@@ -377,6 +389,7 @@ async def maybe_summarize_result(
     return type(summary_result)(
         thread_id=summary_result.thread_id,
         reply_text=prefix + summary_result.reply_text.strip(),
+        generated_images=result.generated_images,
     )
 
 
@@ -391,6 +404,10 @@ def summarize_command(command: str | None) -> str:
     if len(single_line) <= 120:
         return single_line
     return f"{single_line[:117]}..."
+
+
+def should_send_as_photo(path: Path) -> bool:
+    return path.suffix.lower() in {".png", ".jpg", ".jpeg"}
 
 
 def guess_image_suffix(mime_type: str | None) -> str:

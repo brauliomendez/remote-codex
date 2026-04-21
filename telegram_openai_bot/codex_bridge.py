@@ -3,20 +3,26 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
+import time
 
 from .config import Settings
 
 LOGGER = logging.getLogger(__name__)
 CODEX_STREAM_LIMIT_BYTES = 4 * 1024 * 1024
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+PATH_TOKEN_RE = re.compile(r"(?P<path>(?:\./|/)?[^\s`\"']+\.(?:png|jpg|jpeg|webp|gif))", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
 class CodexResult:
     thread_id: str
     reply_text: str
+    generated_images: tuple[Path, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -43,6 +49,7 @@ class CodexBridge:
         image_paths: list[Path] | None = None,
         event_callback: EventCallback | None = None,
     ) -> CodexResult:
+        started_at = time.time()
         command = self._build_command(workdir=workdir, thread_id=thread_id, image_paths=image_paths or [])
         LOGGER.info("Running Codex in %s", workdir)
         process = await asyncio.create_subprocess_exec(
@@ -150,7 +157,17 @@ class CodexBridge:
             else:
                 raise RuntimeError("Codex finished without a final assistant message.")
 
-        return CodexResult(thread_id=captured_thread_id, reply_text=reply_text)
+        generated_images = self._collect_generated_images(
+            workdir=workdir,
+            thread_id=captured_thread_id,
+            reply_text=reply_text,
+            started_at=started_at,
+        )
+        return CodexResult(
+            thread_id=captured_thread_id,
+            reply_text=reply_text,
+            generated_images=generated_images,
+        )
 
     async def _emit(self, callback: EventCallback | None, event: CodexEvent) -> None:
         if callback is None:
@@ -189,3 +206,78 @@ class CodexBridge:
             command.extend(["--image", str(image_path)])
         command.append("-")
         return command
+
+    def _collect_generated_images(
+        self,
+        workdir: Path,
+        thread_id: str,
+        reply_text: str,
+        started_at: float,
+    ) -> tuple[Path, ...]:
+        explicit_paths = self._resolve_reply_image_paths(reply_text=reply_text, workdir=workdir, thread_id=thread_id)
+        if explicit_paths:
+            return explicit_paths
+
+        generated_dir = self._generated_images_dir(thread_id)
+        if not generated_dir.is_dir():
+            return ()
+
+        candidates = [
+            path
+            for path in generated_dir.iterdir()
+            if path.is_file()
+            and path.suffix.lower() in IMAGE_SUFFIXES
+            and path.stat().st_mtime >= started_at - 2
+        ]
+        candidates.sort(key=lambda path: path.stat().st_mtime)
+        return tuple(candidates)
+
+    def _resolve_reply_image_paths(
+        self,
+        reply_text: str,
+        workdir: Path,
+        thread_id: str,
+    ) -> tuple[Path, ...]:
+        resolved: list[Path] = []
+        seen: set[Path] = set()
+        generated_dir = self._generated_images_dir(thread_id)
+
+        for match in PATH_TOKEN_RE.finditer(reply_text):
+            raw_path = match.group("path").rstrip(".,:;)]}")
+            candidates = self._candidate_paths_for_token(
+                raw_path=raw_path,
+                workdir=workdir,
+                generated_dir=generated_dir,
+            )
+            for candidate in candidates:
+                if not candidate.is_file():
+                    continue
+                if candidate.suffix.lower() not in IMAGE_SUFFIXES:
+                    continue
+                resolved_path = candidate.resolve()
+                if resolved_path in seen:
+                    continue
+                seen.add(resolved_path)
+                resolved.append(resolved_path)
+                break
+
+        return tuple(resolved)
+
+    def _candidate_paths_for_token(
+        self,
+        raw_path: str,
+        workdir: Path,
+        generated_dir: Path,
+    ) -> tuple[Path, ...]:
+        token_path = Path(raw_path)
+        candidates: list[Path] = []
+        if token_path.is_absolute():
+            candidates.append(token_path)
+        else:
+            candidates.append((workdir / token_path).resolve())
+            candidates.append((generated_dir / token_path.name).resolve())
+        return tuple(candidates)
+
+    def _generated_images_dir(self, thread_id: str) -> Path:
+        codex_home = Path(os.getenv("CODEX_HOME", str(Path.home() / ".codex"))).expanduser()
+        return codex_home / "generated_images" / thread_id
