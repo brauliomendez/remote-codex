@@ -87,10 +87,14 @@ class ChatStateStore:
         self._upsert(state)
         return state
 
-    def clear_chat_history(self, chat_id: int) -> ChatState:
+    def clear_current_session(self, chat_id: int) -> ChatState:
         current = self.get_chat_state(chat_id)
-        with self._connect() as connection:
-            connection.execute("DELETE FROM chat_sessions WHERE chat_id = ?", (chat_id,))
+        if current.thread_id is not None:
+            with self._connect() as connection:
+                connection.execute(
+                    "DELETE FROM chat_sessions WHERE chat_id = ? AND thread_id = ?",
+                    (chat_id, current.thread_id),
+                )
         state = ChatState(chat_id=chat_id, workdir=current.workdir, thread_id=None)
         self._upsert(state)
         return state

@@ -25,7 +25,7 @@ It does not use `openai-agents`, does not expose Codex through MCP, and does not
 - `/sessions`: lists recent sessions stored for that chat
 - `/resume <number|thread_id>`: resumes a previous session and restores its `workdir`
 - `/new`: clears the current `thread_id` link but keeps session history for `/resume`
-- `/reset`: clears the current `thread_id` link and deletes the session history stored by the bot for that chat
+- `/reset`: deletes only the current `thread_id` from that chat history and keeps the other saved sessions
 
 ## Quick Start
 

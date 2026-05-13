@@ -44,9 +44,9 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     chat_id = update.effective_chat.id
-    state = get_state_store(context.application).clear_chat_history(chat_id)
+    state = get_state_store(context.application).clear_current_session(chat_id)
     await message.reply_text(
-        f"Sesion actual e historial borrados para este chat. Path actual: `{state.workdir}`",
+        f"Sesion actual borrada. El resto del historial sigue disponible con /sessions. Path actual: `{state.workdir}`",
         parse_mode="Markdown",
     )
 
@@ -462,7 +462,7 @@ async def post_init(application: Application) -> None:
             BotCommand("new", "Start a new conversation and keep history"),
             BotCommand("sessions", "List recent Codex conversations"),
             BotCommand("resume", "Resume a previous Codex conversation"),
-            BotCommand("reset", "Clear current conversation and session history"),
+            BotCommand("reset", "Delete the current conversation only"),
         ]
     )
 
