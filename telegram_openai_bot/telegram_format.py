@@ -71,21 +71,53 @@ def split_plain_text_chunks(text: str) -> list[str]:
 def _split_blocks(text: str) -> list[str]:
     blocks: list[str] = []
     current: list[str] = []
+    current_kind: str | None = None
+    fence: list[str] = []
     in_fence = False
     for line in text.splitlines():
         if line.startswith("```"):
-            in_fence = not in_fence
-            current.append(line)
-            continue
-        if not in_fence and not line.strip():
+            if in_fence:
+                fence.append(line)
+                blocks.append("\n".join(fence).strip())
+                fence = []
+                in_fence = False
+                continue
             if current:
                 blocks.append("\n".join(current).strip())
                 current = []
+                current_kind = None
+            fence.append(line)
+            in_fence = True
             continue
+        if in_fence:
+            fence.append(line)
+            continue
+        if not line.strip():
+            if current:
+                blocks.append("\n".join(current).strip())
+                current = []
+                current_kind = None
+            continue
+        line_kind = _line_kind(line)
+        if current and (line_kind != current_kind or current_kind == "heading"):
+            blocks.append("\n".join(current).strip())
+            current = []
         current.append(line)
+        current_kind = line_kind
+    if fence:
+        blocks.append("\n".join(fence).strip())
     if current:
         blocks.append("\n".join(current).strip())
     return blocks
+
+
+def _line_kind(line: str) -> str:
+    stripped = line.strip()
+    if stripped.startswith("#"):
+        return "heading"
+    if ORDERED_LIST_RE.match(stripped) or UNORDERED_LIST_RE.match(stripped):
+        return "list"
+    return "paragraph"
 
 
 def _render_block_to_chunks(block: str) -> list[str]:
@@ -101,7 +133,7 @@ def _render_block_to_chunks(block: str) -> list[str]:
         title = lines[0].lstrip("#").strip()
         return _split_long_block(f"<b>{_render_inline(title)}</b>")
 
-    paragraph = "<br>".join(_render_inline(line) for line in lines)
+    paragraph = "\n".join(_render_inline(line) for line in lines)
     return _split_long_block(paragraph)
 
 
@@ -142,7 +174,7 @@ def _render_list(lines: list[str]) -> str:
             continue
         content = UNORDERED_LIST_RE.sub("", stripped, count=1)
         rendered_lines.append(f"• {_render_inline(content)}")
-    return "<br>".join(rendered_lines)
+    return "\n".join(rendered_lines)
 
 
 def _split_long_block(rendered: str) -> list[str]:
@@ -154,14 +186,14 @@ def _split_long_block(rendered: str) -> list[str]:
     remaining = plain.strip()
     while remaining:
         if len(remaining) <= SAFE_TELEGRAM_MESSAGE_LENGTH:
-            parts.append(escape(remaining).replace("\n", "<br>"))
+            parts.append(escape(remaining))
             break
         split_at = remaining.rfind("\n", 0, SAFE_TELEGRAM_MESSAGE_LENGTH)
         if split_at <= 0:
             split_at = remaining.rfind(" ", 0, SAFE_TELEGRAM_MESSAGE_LENGTH)
         if split_at <= 0:
             split_at = SAFE_TELEGRAM_MESSAGE_LENGTH
-        parts.append(escape(remaining[:split_at].strip()).replace("\n", "<br>"))
+        parts.append(escape(remaining[:split_at].strip()))
         remaining = remaining[split_at:].strip()
     return parts
 

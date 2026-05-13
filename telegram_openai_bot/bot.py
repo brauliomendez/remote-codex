@@ -14,7 +14,7 @@ from telegram.ext import Application, ApplicationBuilder, CommandHandler, Contex
 from .codex_bridge import CodexBridge, CodexEvent
 from .config import Settings
 from .state import ChatStateStore
-from .telegram_format import split_plain_text_chunks
+from .telegram_format import render_telegram_html_chunks, split_plain_text_chunks
 
 LOGGER = logging.getLogger(__name__)
 WORD_RE = re.compile(r"\S+")
@@ -307,8 +307,8 @@ class ProgressMessage:
     async def note(self, text: str) -> None:
         await self._push(text)
 
-    async def set_final(self, text: str) -> None:
-        await self._edit(text)
+    async def set_final(self, text: str, parse_mode: str | None = None) -> bool:
+        return await self._edit(text, parse_mode=parse_mode)
 
     async def _push(self, text: str) -> None:
         clean = text.strip()
@@ -320,17 +320,42 @@ class ProgressMessage:
         self.lines = self.lines[-12:]
         await self._edit("\n\n".join(self.lines)[-3200:])
 
-    async def _edit(self, text: str) -> None:
+    async def _edit(self, text: str, parse_mode: str | None = None) -> bool:
         if text == self.last_render:
-            return
+            return True
         try:
-            await self.message.edit_text(text)
+            await self.message.edit_text(text, parse_mode=parse_mode)
             self.last_render = text
+            return True
         except Exception:
             LOGGER.exception("Telegram message edit failed")
+            return False
 
 
 async def reply_streamed_result(progress: ProgressMessage, text: str) -> None:
+    if await try_reply_rendered_result(progress, text):
+        return
+
+    await reply_plain_result(progress, text)
+
+
+async def try_reply_rendered_result(progress: ProgressMessage, text: str) -> bool:
+    try:
+        chunks = render_telegram_html_chunks(text)
+        if not chunks:
+            await progress.set_final("")
+            return True
+        if not await progress.set_final(chunks[0], parse_mode="HTML"):
+            return False
+        for chunk in chunks[1:]:
+            await progress.message.reply_text(chunk, parse_mode="HTML")
+        return True
+    except Exception:
+        LOGGER.exception("Telegram HTML rendering failed, falling back to plain text")
+        return False
+
+
+async def reply_plain_result(progress: ProgressMessage, text: str) -> None:
     chunks = split_plain_text_chunks(text)
     if not chunks:
         await progress.set_final("")
