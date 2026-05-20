@@ -151,18 +151,20 @@ class CodexBridge:
             raise RuntimeError("Codex did not return a thread id.")
 
         reply_text = agent_messages[-1].strip() if agent_messages else ""
-        if not reply_text:
-            if stderr_text:
-                reply_text = stderr_text
-            else:
-                raise RuntimeError("Codex finished without a final assistant message.")
-
         generated_images = self._collect_generated_images(
             workdir=workdir,
             thread_id=captured_thread_id,
             reply_text=reply_text,
             started_at=started_at,
         )
+        if not reply_text:
+            if stderr_text:
+                reply_text = stderr_text
+            elif generated_images:
+                reply_text = "Imagen generada."
+            else:
+                raise RuntimeError("Codex finished without a final assistant message.")
+
         return CodexResult(
             thread_id=captured_thread_id,
             reply_text=reply_text,

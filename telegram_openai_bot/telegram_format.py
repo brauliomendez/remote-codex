@@ -11,11 +11,6 @@ FENCED_BLOCK_RE = re.compile(r"^```(?P<lang>[^\n`]*)\n(?P<body>.*?)\n```$", re.D
 ORDERED_LIST_RE = re.compile(r"^\d+\.\s+")
 UNORDERED_LIST_RE = re.compile(r"^[-*+]\s+")
 INLINE_CODE_RE = re.compile(r"`([^`\n]+)`")
-STRONG_RE = re.compile(r"\*\*(.+?)\*\*")
-UNDERLINE_RE = re.compile(r"__(.+?)__")
-STRIKE_RE = re.compile(r"~~(.+?)~~")
-EMPHASIS_STAR_RE = re.compile(r"(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)")
-EMPHASIS_UNDERSCORE_RE = re.compile(r"(?<!_)_(?!\s)(.+?)(?<!\s)_(?!_)")
 
 
 def render_telegram_html_chunks(markdown_text: str) -> list[str]:
@@ -239,10 +234,80 @@ def _split_inline_code(text: str) -> list[tuple[bool, str]]:
 
 
 def _render_non_code_inline(text: str) -> str:
-    escaped = escape(text)
-    escaped = STRONG_RE.sub(r"<b>\1</b>", escaped)
-    escaped = UNDERLINE_RE.sub(r"<u>\1</u>", escaped)
-    escaped = STRIKE_RE.sub(r"<s>\1</s>", escaped)
-    escaped = EMPHASIS_STAR_RE.sub(r"<i>\1</i>", escaped)
-    escaped = EMPHASIS_UNDERSCORE_RE.sub(r"<i>\1</i>", escaped)
-    return escaped
+    return _render_markdown_spans(text)
+
+
+def _render_markdown_spans(text: str) -> str:
+    rendered: list[str] = []
+    index = 0
+    markers = (
+        ("**", "</b>", "<b>"),
+        ("__", "</u>", "<u>"),
+        ("~~", "</s>", "<s>"),
+        ("*", "</i>", "<i>"),
+        ("_", "</i>", "<i>"),
+    )
+
+    while index < len(text):
+        match = _find_marker_at(text, index, markers)
+        if match is None:
+            rendered.append(escape(text[index]))
+            index += 1
+            continue
+
+        marker, closing_tag, opening_tag = match
+        end = _find_closing_marker(text, marker, index + len(marker))
+        if end is None:
+            rendered.append(escape(marker))
+            index += len(marker)
+            continue
+
+        inner = text[index + len(marker) : end]
+        if not inner.strip():
+            rendered.append(escape(marker))
+            index += len(marker)
+            continue
+
+        rendered.append(f"{opening_tag}{_render_markdown_spans(inner)}{closing_tag}")
+        index = end + len(marker)
+
+    return "".join(rendered)
+
+
+def _find_marker_at(
+    text: str,
+    index: int,
+    markers: tuple[tuple[str, str, str], ...],
+) -> tuple[str, str, str] | None:
+    for marker, closing_tag, opening_tag in markers:
+        if not text.startswith(marker, index):
+            continue
+        if marker in {"*", "_"}:
+            previous_char = text[index - 1] if index > 0 else ""
+            next_char = text[index + 1] if index + 1 < len(text) else ""
+            if (
+                previous_char == marker
+                or previous_char.isalnum()
+                or next_char == marker
+                or next_char.isspace()
+            ):
+                continue
+        return marker, closing_tag, opening_tag
+    return None
+
+
+def _find_closing_marker(text: str, marker: str, start: int) -> int | None:
+    index = start
+    while index < len(text):
+        index = text.find(marker, index)
+        if index == -1:
+            return None
+        previous_char = text[index - 1] if index > 0 else ""
+        next_char = text[index + len(marker)] if index + len(marker) < len(text) else ""
+        if marker in {"*", "_"} and (
+            previous_char.isspace() or next_char == marker or next_char.isalnum()
+        ):
+            index += len(marker)
+            continue
+        return index
+    return None

@@ -286,7 +286,7 @@ class ProgressMessage:
     def __init__(self, message):
         self.message = message
         self.lines = ["Codex trabajando..."]
-        self.last_render = ""
+        self.last_render: tuple[str, str | None] = ("", None)
 
     async def handle_event(self, event: CodexEvent) -> None:
         if event.type == "turn_started":
@@ -318,14 +318,30 @@ class ProgressMessage:
             return
         self.lines.append(clean)
         self.lines = self.lines[-12:]
-        await self._edit("\n\n".join(self.lines)[-3200:])
+        text = "\n\n".join(self.lines)[-3200:]
+        if await self._edit_rendered(text):
+            return
+        await self._edit(text)
+
+    async def _edit_rendered(self, text: str) -> bool:
+        try:
+            chunks = render_telegram_html_chunks(text)
+        except Exception:
+            LOGGER.exception("Telegram progress HTML rendering failed")
+            return False
+
+        if not chunks:
+            return await self._edit("")
+
+        return await self._edit(chunks[-1], parse_mode="HTML")
 
     async def _edit(self, text: str, parse_mode: str | None = None) -> bool:
-        if text == self.last_render:
+        render_key = (text, parse_mode)
+        if render_key == self.last_render:
             return True
         try:
             await self.message.edit_text(text, parse_mode=parse_mode)
-            self.last_render = text
+            self.last_render = render_key
             return True
         except Exception:
             LOGGER.exception("Telegram message edit failed")
