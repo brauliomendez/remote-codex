@@ -293,10 +293,13 @@ class ProgressMessage:
             await self._push(event.text or "Codex pensando...")
             return
         if event.type == "command_started":
-            await self._push(f"Ejecutando: {summarize_command(event.command)}")
+            await self._push(f"Ejecutando:\n{format_code_block(summarize_command(event.command))}")
             return
         if event.type == "command_completed":
-            line = f"Comando completado ({event.exit_code}): {summarize_command(event.command)}"
+            line = (
+                f"Comando completado ({event.exit_code}):\n"
+                f"{format_code_block(summarize_command(event.command))}"
+            )
             if event.exit_code not in (None, 0) and event.output:
                 line = f"{line}\n{event.output.strip()[:300]}"
             await self._push(line)
@@ -445,6 +448,10 @@ def summarize_command(command: str | None) -> str:
     if len(single_line) <= 120:
         return single_line
     return f"{single_line[:117]}..."
+
+
+def format_code_block(text: str) -> str:
+    return f"```\n{text.replace('```', '``\u02cb')}\n```"
 
 
 def should_send_as_photo(path: Path) -> bool:
