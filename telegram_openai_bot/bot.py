@@ -9,7 +9,16 @@ import tempfile
 
 from telegram import BotCommand, Update
 from telegram.constants import ChatAction
-from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    ApplicationBuilder,
+    ApplicationHandlerStop,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    TypeHandler,
+    filters,
+)
 
 from .codex_bridge import CodexBridge, CodexEvent
 from .config import Settings
@@ -18,6 +27,24 @@ from .telegram_format import render_telegram_html_chunks, split_plain_text_chunk
 
 LOGGER = logging.getLogger(__name__)
 WORD_RE = re.compile(r"\S+")
+
+
+async def reject_unauthorized_update(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    settings: Settings = context.application.bot_data["settings"]
+    user = update.effective_user
+    if user is not None and user.id in settings.telegram_allowed_user_ids:
+        return
+
+    LOGGER.warning(
+        "Rejected Telegram update from user_id=%s username=%s",
+        user.id if user is not None else None,
+        user.username if user is not None else None,
+    )
+    if update.effective_message is not None:
+        await update.effective_message.reply_text("No autorizado.")
+    raise ApplicationHandlerStop
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -504,6 +531,7 @@ def build_application(settings: Settings) -> Application:
         default_workdir=settings.codex_default_workdir,
     )
     application.bot_data["chat_locks"] = {}
+    application.add_handler(TypeHandler(Update, reject_unauthorized_update), group=-1)
     application.add_handler(CommandHandler("reset", reset_command))
     application.add_handler(CommandHandler("new", new_command))
     application.add_handler(CommandHandler("path", path_command))

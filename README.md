@@ -57,6 +57,7 @@ codex exec --help
 Variables in `.env`:
 
 - `TELEGRAM_BOT_TOKEN`: Telegram bot token
+- `TELEGRAM_ALLOWED_USER_IDS`: comma-separated Telegram user IDs allowed to use the bot
 - `CODEX_COMMAND`: binary to run, default `codex`
 - `CODEX_BASE_ARGS`: optional base arguments before `exec`
 - `CODEX_DEFAULT_WORKDIR`: default initial directory for new chats

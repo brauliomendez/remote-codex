@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 @dataclass(frozen=True)
 class Settings:
     telegram_bot_token: str
+    telegram_allowed_user_ids: frozenset[int]
     codex_command: str
     codex_base_args: list[str]
     codex_default_workdir: Path
@@ -33,6 +34,17 @@ def load_settings() -> Settings:
     load_dotenv()
 
     telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    allowed_user_ids_raw = os.getenv("TELEGRAM_ALLOWED_USER_IDS", "").strip()
+    try:
+        telegram_allowed_user_ids = frozenset(
+            int(value.strip())
+            for value in allowed_user_ids_raw.split(",")
+            if value.strip()
+        )
+    except ValueError as error:
+        raise RuntimeError(
+            "TELEGRAM_ALLOWED_USER_IDS must be a comma-separated list of numeric IDs"
+        ) from error
     codex_command = os.getenv("CODEX_COMMAND", "codex").strip()
     codex_base_args = shlex.split(os.getenv("CODEX_BASE_ARGS", ""))
     default_workdir_raw = os.getenv("CODEX_DEFAULT_WORKDIR", "").strip() or os.getcwd()
@@ -52,6 +64,7 @@ def load_settings() -> Settings:
         name
         for name, value in (
             ("TELEGRAM_BOT_TOKEN", telegram_bot_token),
+            ("TELEGRAM_ALLOWED_USER_IDS", telegram_allowed_user_ids),
         )
         if not value
     ]
@@ -64,6 +77,7 @@ def load_settings() -> Settings:
 
     return Settings(
         telegram_bot_token=telegram_bot_token,
+        telegram_allowed_user_ids=telegram_allowed_user_ids,
         codex_command=codex_command,
         codex_base_args=codex_base_args,
         codex_default_workdir=codex_default_workdir,

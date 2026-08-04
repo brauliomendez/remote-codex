@@ -14,6 +14,7 @@ from .config import Settings
 
 LOGGER = logging.getLogger(__name__)
 CODEX_STREAM_LIMIT_BYTES = 4 * 1024 * 1024
+STDERR_TAIL_LIMIT_BYTES = 64 * 1024
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 PATH_TOKEN_RE = re.compile(r"(?P<path>(?:\./|/)?[^\s`\"']+\.(?:png|jpg|jpeg|webp|gif))", re.IGNORECASE)
 
@@ -131,19 +132,23 @@ class CodexBridge:
                         CodexEvent(type="agent_message", text=text),
                     )
 
-        stderr_chunks: list[str] = []
+        # Keep only the tail needed for diagnostics while always draining the pipe.
+        stderr_tail = bytearray()
 
         async def read_stderr() -> None:
             while True:
                 raw_line = await process.stderr.readline()
                 if not raw_line:
                     break
-                stderr_chunks.append(raw_line.decode("utf-8", errors="replace"))
+                stderr_tail.extend(raw_line)
+                overflow = len(stderr_tail) - STDERR_TAIL_LIMIT_BYTES
+                if overflow > 0:
+                    del stderr_tail[:overflow]
 
         await asyncio.gather(read_stdout(), read_stderr())
         return_code = await process.wait()
 
-        stderr_text = "".join(stderr_chunks).strip()
+        stderr_text = stderr_tail.decode("utf-8", errors="replace").strip()
         if return_code != 0:
             raise RuntimeError(stderr_text or f"Codex exited with status {return_code}")
 

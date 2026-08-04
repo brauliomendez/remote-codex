@@ -23,12 +23,18 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # httpx logs Telegram API URLs, which contain the bot token.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     settings = load_settings()
 
     if args.check_config:
         print("Configuration looks valid.")
         print(f"CODEX_COMMAND={settings.codex_command}")
+        print(
+            "TELEGRAM_ALLOWED_USER_IDS="
+            + ",".join(str(user_id) for user_id in sorted(settings.telegram_allowed_user_ids))
+        )
         print(f"CODEX_BASE_ARGS={' '.join(settings.codex_base_args)}")
         print(f"CODEX_DEFAULT_WORKDIR={settings.codex_default_workdir}")
         print(f"CODEX_MODEL={settings.codex_model or ''}")
