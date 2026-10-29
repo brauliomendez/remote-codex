@@ -11,6 +11,7 @@ FENCED_BLOCK_RE = re.compile(r"^```(?P<lang>[^\n`]*)\n(?P<body>.*?)\n```$", re.D
 ORDERED_LIST_RE = re.compile(r"^\d+\.\s+")
 UNORDERED_LIST_RE = re.compile(r"^[-*+]\s+")
 INLINE_CODE_RE = re.compile(r"`([^`\n]+)`")
+TABLE_SEPARATOR_RE = re.compile(r":?-{3,}:?")
 
 
 def render_telegram_html_chunks(markdown_text: str) -> list[str]:
@@ -121,6 +122,30 @@ def _render_block_to_chunks(block: str) -> list[str]:
         return _render_fenced_code_chunks(fenced.group("body"))
 
     lines = block.splitlines()
+    for index in range(len(lines) - 1):
+        headers = _table_cells(lines[index])
+        separators = _table_cells(lines[index + 1])
+        if (
+            "|" not in lines[index]
+            or len(headers) < 2
+            or len(headers) != len(separators)
+            or not all(TABLE_SEPARATOR_RE.fullmatch(cell) for cell in separators)
+        ):
+            continue
+        rows = [headers]
+        end = index + 2
+        while end < len(lines) and "|" in lines[end]:
+            cells = _table_cells(lines[end])
+            if len(cells) != len(headers):
+                break
+            rows.append(cells)
+            end += 1
+        parts = _render_block_to_chunks("\n".join(lines[:index])) if index else []
+        parts.extend(_render_table_chunks(rows, separators))
+        if end < len(lines):
+            parts.extend(_render_block_to_chunks("\n".join(lines[end:])))
+        return parts
+
     if all(UNORDERED_LIST_RE.match(line) or ORDERED_LIST_RE.match(line) for line in lines if line.strip()):
         return _split_long_block(_render_list(lines))
 
@@ -130,6 +155,28 @@ def _render_block_to_chunks(block: str) -> list[str]:
 
     paragraph = "\n".join(_render_inline(line) for line in lines)
     return _split_long_block(paragraph)
+
+
+def _table_cells(line: str) -> list[str]:
+    return [cell.strip().replace(r"\|", "|") for cell in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+
+
+def _render_table_chunks(rows: list[list[str]], separators: list[str]) -> list[str]:
+    # Render inline markup before measuring so its delimiters do not widen columns.
+    rows = [[strip_telegram_html(_render_inline(cell)) for cell in row] for row in rows]
+    widths = [max(len(row[column]) for row in rows) for column in range(len(separators))]
+    lines = []
+    for row in rows:
+        cells = []
+        for cell, width, separator in zip(row, widths, separators):
+            if separator.startswith(":") and separator.endswith(":"):
+                cells.append(cell.center(width))
+            elif separator.endswith(":"):
+                cells.append(cell.rjust(width))
+            else:
+                cells.append(cell.ljust(width))
+        lines.append("  ".join(cells).rstrip())
+    return _render_fenced_code_chunks("\n".join(lines))
 
 
 def _render_fenced_code_chunks(code: str) -> list[str]:
@@ -143,7 +190,7 @@ def _render_fenced_code_chunks(code: str) -> list[str]:
     max_code_payload = SAFE_TELEGRAM_MESSAGE_LENGTH - wrapper_overhead
     current_len = wrapper_overhead
     for line in lines:
-        for escaped_line in _chunk_long_text(escape(line), max_code_payload):
+        for escaped_line in _chunk_long_text(line, max_code_payload):
             line_len = len(escaped_line) + (1 if current else 0)
             if current and current_len + line_len > SAFE_TELEGRAM_MESSAGE_LENGTH:
                 chunks.append(f"<pre><code>{'\n'.join(current)}</code></pre>")
@@ -194,16 +241,20 @@ def _split_long_block(rendered: str) -> list[str]:
 
 
 def _chunk_long_text(text: str, max_length: int) -> list[str]:
-    if len(text) <= max_length:
-        return [text]
+    # Escape whole characters so a chunk never splits an HTML entity.
     parts: list[str] = []
-    remaining = text
-    while remaining:
-        if len(remaining) <= max_length:
-            parts.append(remaining)
-            break
-        parts.append(remaining[:max_length])
-        remaining = remaining[max_length:]
+    current: list[str] = []
+    length = 0
+    for char in text:
+        escaped = escape(char)
+        if length + len(escaped) > max_length and current:
+            parts.append("".join(current))
+            current = []
+            length = 0
+        current.append(escaped)
+        length += len(escaped)
+    if current or not parts:
+        parts.append("".join(current))
     return parts
 
 
